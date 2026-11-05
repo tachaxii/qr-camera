@@ -115,8 +115,20 @@
 
           document.getElementById('stopBtn').style.display = 'none';
 
-          // ส่งรหัส QR กลับไปยังหน้า Apps Script
-          if (window.opener && !window.opener.closed) {
+          // ถ้าฝังอยู่ใน Apps Script ให้ส่งรหัสกลับไปยังหน้าหลัก
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              type: 'QR_SCANNED',
+              code: decodedText
+            }, '*');
+
+            status.textContent = 'ส่งรหัสกลับระบบเรียบร้อยแล้ว';
+            document.getElementById('startBtn').style.display = 'block';
+            document.getElementById('startBtn').disabled = false;
+            processing = false;
+          }
+          // รองรับการเปิดเป็นหน้าต่างแยกแบบเดิมด้วย
+          else if (window.opener && !window.opener.closed) {
             window.opener.postMessage({
               type: 'QR_SCANNED',
               code: decodedText
@@ -126,7 +138,9 @@
             setTimeout(() => window.close(), 700);
           } else {
             status.textContent =
-              'ไม่พบหน้าระบบหลัก กรุณากลับไปเปิดจากระบบเช็คชื่อ';
+              'ไม่พบหน้าระบบหลัก กรุณาเปิดจากระบบเช็คชื่อ';
+            document.getElementById('startBtn').style.display = 'block';
+            processing = false;
           }
         },
         function() {}
@@ -158,10 +172,19 @@
     }
 
     running = false;
+    processing = false;
     document.getElementById('startBtn').style.display = 'block';
     document.getElementById('stopBtn').style.display = 'none';
     document.getElementById('status').textContent = 'ปิดกล้องแล้ว';
   }
+
+  // รับคำสั่งหยุดกล้องจากหน้า Apps Script
+  window.addEventListener('message', function(event) {
+    if (event.source !== window.parent) return;
+    if (event.data && event.data.type === 'STOP_CAMERA') {
+      stopCamera();
+    }
+  });
 </script>
 </body>
 </html>
