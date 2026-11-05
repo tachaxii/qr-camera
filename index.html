@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>สแกน QR Code นักเรียน</title>
+  <title>ระบบสแกน QR นักเรียน</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
@@ -22,7 +22,7 @@
       background: white;
       max-width: 430px;
       margin: 10px auto;
-      padding: 16px;
+      padding: 15px;
       border-radius: 18px;
       box-shadow: 0 4px 18px #0001;
     }
@@ -50,7 +50,7 @@
 
     button {
       width: 100%;
-      padding: 13px;
+      padding: 12px;
       border: 0;
       border-radius: 10px;
       background: #2563eb;
@@ -72,7 +72,8 @@
 
     <div id="reader"></div>
 
-    <button id="startBtn" onclick="startCamera()" style="display:none">
+    <button id="startBtn" onclick="startCamera()"
+      style="display:none">
       📷 แตะเพื่อเริ่มกล้อง
     </button>
 
@@ -83,7 +84,6 @@
   let scanner = null;
   let running = false;
   let processing = false;
-  let stopRequested = false;
 
   const statusText = document.getElementById('status');
   const startBtn = document.getElementById('startBtn');
@@ -95,12 +95,10 @@
         !navigator.mediaDevices.getUserMedia) {
       statusText.textContent =
         'เบราว์เซอร์ไม่รองรับกล้อง กรุณาเปิดผ่าน HTTPS';
-      startBtn.style.display = 'block';
       return;
     }
 
     processing = true;
-    stopRequested = false;
     startBtn.disabled = true;
     statusText.textContent = 'กำลังขออนุญาตใช้กล้อง...';
 
@@ -121,7 +119,6 @@
             return { width: size, height: size };
           }
         },
-
         async function(decodedText) {
           if (!running || processing) return;
 
@@ -135,29 +132,21 @@
             await scanner.stop();
           } catch (e) {}
 
-          // ส่งรหัส QR กลับไปยัง Google Apps Script
+          // ส่งรหัสกลับไปยังหน้าเว็บแอปที่ฝัง iframe นี้
           window.parent.postMessage({
             type: 'QR_SCANNED',
             code: decodedText
-          }, '*');
+          }, 'https://script.google.com');
 
           statusText.textContent =
-            'ส่งรหัสแล้ว กำลังบันทึกการเข้าเรียน...';
+            'สแกนสำเร็จ กำลังบันทึกข้อมูล';
 
           startBtn.style.display = 'none';
-          processing = false;
         },
-
         function() {}
       );
 
       running = true;
-
-      if (stopRequested) {
-        await stopCamera();
-        return;
-      }
-
       statusText.textContent =
         'เปิดกล้องแล้ว กรุณาสแกน QR Code';
 
@@ -167,10 +156,9 @@
       console.error(error);
 
       statusText.textContent =
-        'เปิดกล้องอัตโนมัติไม่สำเร็จ กรุณากดปุ่มเริ่มกล้องและอนุญาตการใช้กล้อง';
+        'ไม่สามารถเปิดกล้องอัตโนมัติได้ กรุณากดปุ่มเริ่มกล้อง';
 
       startBtn.style.display = 'block';
-
     } finally {
       processing = false;
       startBtn.disabled = false;
@@ -178,8 +166,6 @@
   }
 
   async function stopCamera() {
-    stopRequested = true;
-
     if (scanner && running) {
       try {
         await scanner.stop();
@@ -187,25 +173,19 @@
     }
 
     running = false;
-
-    statusText.textContent = 'หยุดกล้องชั่วคราว';
-    startBtn.style.display = 'none';
+    statusText.textContent = 'หยุดกล้องแล้ว';
   }
 
-  // รับคำสั่งจากหน้า Google Apps Script
-  window.addEventListener('message', function(event) {
-    if (event.data && event.data.type === 'START_CAMERA') {
-      startCamera();
-    }
+  // พยายามเปิดกล้องเมื่อหน้า iframe โหลดเสร็จ
+  window.addEventListener('load', function() {
+    startCamera();
+  });
 
+  // เมื่อหน้าเว็บแอปแจ้งให้หยุดกล้อง
+  window.addEventListener('message', function(event) {
     if (event.data && event.data.type === 'STOP_CAMERA') {
       stopCamera();
     }
-  });
-
-  // พยายามเปิดกล้องอัตโนมัติเมื่อ iframe โหลดเสร็จ
-  window.addEventListener('load', function() {
-    startCamera();
   });
 </script>
 </body>
