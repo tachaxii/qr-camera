@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>สแกน QR Code นักเรียน</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f6fb;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: white;
+      max-width: 430px;
+      margin: 20px auto;
+      padding: 22px;
+      border-radius: 18px;
+      box-shadow: 0 4px 18px #0001;
+    }
+    h2 { color: #263b63; }
+    #reader {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      margin: 18px auto;
+      overflow: hidden;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+      font-size: 17px;
+      margin: 7px 0;
+    }
+    button.secondary { background: #64748b; }
+    #status {
+      color: #475569;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>📷 สแกน QR Code นักเรียน</h2>
+    <p>นำ QR Code ของนักเรียนมาไว้ในกรอบ</p>
+
+    <div id="reader"></div>
+
+    <button id="startBtn" onclick="startCamera()">
+      📷 เริ่มเปิดกล้อง
+    </button>
+
+    <button id="stopBtn" class="secondary"
+      onclick="stopCamera()" style="display:none">
+      ปิดกล้อง
+    </button>
+
+    <p id="status">พร้อมสแกน QR Code</p>
+  </div>
+
+<script>
+  let scanner = null;
+  let running = false;
+  let processing = false;
+
+  async function startCamera() {
+    if (running || processing) return;
+
+    const status = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+
+    if (!navigator.mediaDevices ||
+        !navigator.mediaDevices.getUserMedia) {
+      status.textContent = 'เบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาใช้ HTTPS';
+      return;
+    }
+
+    processing = true;
+    startBtn.disabled = true;
+    status.textContent = 'กำลังขออนุญาตใช้กล้อง...';
+
+    try {
+      if (!scanner) {
+        scanner = new Html5Qrcode('reader');
+      }
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          aspectRatio: 1,
+          qrbox: function(width, height) {
+            const size = Math.floor(Math.min(width, height) * 0.72);
+            return { width: size, height: size };
+          }
+        },
+        async function(decodedText) {
+          if (!running) return;
+
+          running = false;
+          processing = true;
+          status.textContent = 'อ่าน QR สำเร็จ กำลังส่งข้อมูล...';
+
+          try {
+            await scanner.stop();
+          } catch (e) {}
+
+          document.getElementById('stopBtn').style.display = 'none';
+
+          // ส่งรหัส QR กลับไปยังหน้า Apps Script
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({
+              type: 'QR_SCANNED',
+              code: decodedText
+            }, '*');
+
+            status.textContent = 'ส่งรหัสกลับระบบเรียบร้อยแล้ว';
+            setTimeout(() => window.close(), 700);
+          } else {
+            status.textContent =
+              'ไม่พบหน้าระบบหลัก กรุณากลับไปเปิดจากระบบเช็คชื่อ';
+          }
+        },
+        function() {}
+      );
+
+      running = true;
+      status.textContent = 'เปิดกล้องแล้ว กรุณาสแกน QR Code';
+      startBtn.style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'block';
+
+    } catch (error) {
+      console.error(error);
+      status.textContent =
+        'เปิดกล้องไม่สำเร็จ: ' +
+        (error.message || error.name || 'กรุณาตรวจสอบสิทธิ์กล้อง');
+
+      startBtn.style.display = 'block';
+    } finally {
+      processing = false;
+      startBtn.disabled = false;
+    }
+  }
+
+  async function stopCamera() {
+    if (scanner && running) {
+      try {
+        await scanner.stop();
+      } catch (e) {}
+    }
+
+    running = false;
+    document.getElementById('startBtn').style.display = 'block';
+    document.getElementById('stopBtn').style.display = 'none';
+    document.getElementById('status').textContent = 'ปิดกล้องแล้ว';
+  }
+</script>
+</body>
+</html>
