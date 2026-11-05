@@ -1,70 +1,52 @@
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ระบบสแกน QR นักเรียน</title>
+  <title>สแกน QR Code นักเรียน</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
-
   <style>
-    * { box-sizing: border-box; }
-
     body {
       font-family: Arial, sans-serif;
       background: #f3f6fb;
       margin: 0;
-      padding: 10px;
+      padding: 20px;
       text-align: center;
     }
-
     .card {
       background: white;
       max-width: 430px;
-      margin: 10px auto;
-      padding: 15px;
+      margin: 20px auto;
+      padding: 22px;
       border-radius: 18px;
       box-shadow: 0 4px 18px #0001;
     }
-
-    h2 {
-      color: #263b63;
-      font-size: 20px;
-    }
-
+    h2 { color: #263b63; }
     #reader {
       width: 100%;
       max-width: 360px;
       aspect-ratio: 1 / 1;
-      margin: 12px auto;
+      margin: 18px auto;
       overflow: hidden;
-      border-radius: 12px;
     }
-
-    #status {
-      color: #475569;
-      line-height: 1.6;
-      overflow-wrap: anywhere;
-      font-size: 14px;
-    }
-
     button {
       width: 100%;
-      padding: 12px;
+      padding: 14px;
       border: 0;
       border-radius: 10px;
       background: #2563eb;
       color: white;
-      font-size: 16px;
+      font-size: 17px;
       margin: 7px 0;
     }
-
-    button:disabled {
-      opacity: .5;
+    button.secondary { background: #64748b; }
+    #status {
+      color: #475569;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
     }
   </style>
 </head>
-
 <body>
   <div class="card">
     <h2>📷 สแกน QR Code นักเรียน</h2>
@@ -72,12 +54,16 @@
 
     <div id="reader"></div>
 
-    <button id="startBtn" onclick="startCamera()"
-      style="display:none">
-      📷 แตะเพื่อเริ่มกล้อง
+    <button id="startBtn" onclick="startCamera()">
+      📷 เริ่มเปิดกล้อง
     </button>
 
-    <p id="status">กำลังเตรียมกล้อง...</p>
+    <button id="stopBtn" class="secondary"
+      onclick="stopCamera()" style="display:none">
+      ปิดกล้อง
+    </button>
+
+    <p id="status">พร้อมสแกน QR Code</p>
   </div>
 
 <script>
@@ -85,22 +71,21 @@
   let running = false;
   let processing = false;
 
-  const statusText = document.getElementById('status');
-  const startBtn = document.getElementById('startBtn');
-
   async function startCamera() {
     if (running || processing) return;
 
+    const status = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
+
     if (!navigator.mediaDevices ||
         !navigator.mediaDevices.getUserMedia) {
-      statusText.textContent =
-        'เบราว์เซอร์ไม่รองรับกล้อง กรุณาเปิดผ่าน HTTPS';
+      status.textContent = 'เบราว์เซอร์นี้ไม่รองรับการเปิดกล้อง กรุณาใช้ HTTPS';
       return;
     }
 
     processing = true;
     startBtn.disabled = true;
-    statusText.textContent = 'กำลังขออนุญาตใช้กล้อง...';
+    status.textContent = 'กำลังขออนุญาตใช้กล้อง...';
 
     try {
       if (!scanner) {
@@ -113,50 +98,50 @@
           fps: 10,
           aspectRatio: 1,
           qrbox: function(width, height) {
-            const size = Math.floor(
-              Math.min(width, height) * 0.72
-            );
+            const size = Math.floor(Math.min(width, height) * 0.72);
             return { width: size, height: size };
           }
         },
         async function(decodedText) {
-          if (!running || processing) return;
+          if (!running) return;
 
-          processing = true;
           running = false;
-
-          statusText.textContent =
-            'อ่าน QR สำเร็จ กำลังส่งข้อมูล...';
+          processing = true;
+          status.textContent = 'อ่าน QR สำเร็จ กำลังส่งข้อมูล...';
 
           try {
             await scanner.stop();
           } catch (e) {}
 
-          // ส่งรหัสกลับไปยังหน้าเว็บแอปที่ฝัง iframe นี้
-          window.parent.postMessage({
-            type: 'QR_SCANNED',
-            code: decodedText
-          }, 'https://script.google.com');
+          document.getElementById('stopBtn').style.display = 'none';
 
-          statusText.textContent =
-            'สแกนสำเร็จ กำลังบันทึกข้อมูล';
+          // ส่งรหัส QR กลับไปยังหน้า Apps Script
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage({
+              type: 'QR_SCANNED',
+              code: decodedText
+            }, '*');
 
-          startBtn.style.display = 'none';
+            status.textContent = 'ส่งรหัสกลับระบบเรียบร้อยแล้ว';
+            setTimeout(() => window.close(), 700);
+          } else {
+            status.textContent =
+              'ไม่พบหน้าระบบหลัก กรุณากลับไปเปิดจากระบบเช็คชื่อ';
+          }
         },
         function() {}
       );
 
       running = true;
-      statusText.textContent =
-        'เปิดกล้องแล้ว กรุณาสแกน QR Code';
-
+      status.textContent = 'เปิดกล้องแล้ว กรุณาสแกน QR Code';
       startBtn.style.display = 'none';
+      document.getElementById('stopBtn').style.display = 'block';
 
     } catch (error) {
       console.error(error);
-
-      statusText.textContent =
-        'ไม่สามารถเปิดกล้องอัตโนมัติได้ กรุณากดปุ่มเริ่มกล้อง';
+      status.textContent =
+        'เปิดกล้องไม่สำเร็จ: ' +
+        (error.message || error.name || 'กรุณาตรวจสอบสิทธิ์กล้อง');
 
       startBtn.style.display = 'block';
     } finally {
@@ -173,20 +158,10 @@
     }
 
     running = false;
-    statusText.textContent = 'หยุดกล้องแล้ว';
+    document.getElementById('startBtn').style.display = 'block';
+    document.getElementById('stopBtn').style.display = 'none';
+    document.getElementById('status').textContent = 'ปิดกล้องแล้ว';
   }
-
-  // พยายามเปิดกล้องเมื่อหน้า iframe โหลดเสร็จ
-  window.addEventListener('load', function() {
-    startCamera();
-  });
-
-  // เมื่อหน้าเว็บแอปแจ้งให้หยุดกล้อง
-  window.addEventListener('message', function(event) {
-    if (event.data && event.data.type === 'STOP_CAMERA') {
-      stopCamera();
-    }
-  });
 </script>
 </body>
 </html>
